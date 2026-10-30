@@ -173,7 +173,7 @@ dialog#zoom::backdrop{background:rgba(36,37,37,.78)}
     <div class="legend">
       <span><span class="badge b-hand">Руками</span> делаете вы в браузере</span>
       <span><span class="badge b-ai">Пишет ИИ</span> копируете промт в Claude или ChatGPT</span>
-      <span><span class="badge b-opt">Модуль</span> появился из-за вашего ответа</span>
+      <span><span class="badge b-opt">Доп. шаг</span> появился, потому что вы выбрали это в вопросах</span>
     </div>
   </header>
 
@@ -824,7 +824,7 @@ function renderSteps(){
   const openIds = new Set([...document.querySelectorAll("details.step[open]")].map(d => d.dataset.id));
   const L = steps();
   const nOpt = L.filter(s => s.opt).length;
-  document.getElementById("count").textContent = `${L.length} шагов` + (nOpt ? ` · ${nOpt} модулей по вашим ответам` : "");
+  document.getElementById("count").textContent = `${L.length} шагов` + (nOpt ? ` · из них доп. шагов по вашим ответам: ${nOpt}` : "");
   document.getElementById("steps").innerHTML = L.map((s, i) => {
     const parts = [];
     if (s.explain && S.level === "new") parts.push(`<div class="explain"><b>Что это и зачем.</b> ${s.explain}</div>`);
@@ -846,7 +846,7 @@ function renderSteps(){
     return `<details class="step${s.opt ? " opt-step" : ""}" data-id="${s.id}" ${open ? "open" : ""}>
       <summary><span class="num" aria-hidden="true"></span>
         <span class="s-title">${esc(s.title)}<span class="s-sub">${esc(s.sub || "")}</span></span>
-        <span class="s-badges">${s.opt ? '<span class="badge b-opt">Модуль</span>' : ""}${s.who.map(w => BADGE[w]).join("")}</span></summary>
+        <span class="s-badges">${s.opt ? '<span class="badge b-opt">Доп. шаг</span>' : ""}${s.who.map(w => BADGE[w]).join("")}</span></summary>
       <div class="body">${parts.join("")}</div></details>`;
   }).join("");
   document.getElementById("preview").textContent = master();
