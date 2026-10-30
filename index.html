@@ -312,6 +312,9 @@ dialog#zoom::backdrop{background:rgba(36,37,37,.78)}
           <thead><tr><th></th><th>Firebase</th><th>GitHub Pages</th><th>Ссылка Apps Script</th></tr></thead>
           <tbody>
             <tr><td>Адрес</td><td>Короткий: <code>romashka.web.app</code></td><td>Короткий: <code>команда.github.io/romashka</code></td><td>Длинный: <code>script.google.com/macros/s/…/exec</code></td></tr>
+            <tr><td>Где хранятся данные и результаты</td><td>В Google: Таблица и Apps Script. Firebase хранит только файл страницы</td><td>Тоже в Google: Таблица и Apps Script. GitHub хранит только файл страницы</td><td>В Google: Таблица и Apps Script</td></tr>
+            <tr><td>Кто может открыть</td><td colspan="3">Во всех трёх — любой, у кого есть ссылка. Закрыть можно только доступом к данным в самом Apps Script</td></tr>
+            <tr><td>Кто может опубликовать</td><td>Тот, у кого есть доступ к Google-аккаунту клиента</td><td>Тот, у кого есть аккаунт GitHub. Смотрящим аккаунт не нужен</td><td>Тот, у кого есть доступ к Google-аккаунту клиента</td></tr>
             <tr><td>Чей аккаунт</td><td>Google-аккаунт клиента — тот же, где скрипт. Всё остаётся у клиента</td><td>Аккаунт GitHub команды, не клиента</td><td>Google-аккаунт клиента — сам скрипт</td></tr>
             <tr><td>Что нужно настроить</td><td>Проект Google Cloud и Firebase. Если Google не даёт создать проект (нет России в списке стран) — вариант не подойдёт</td><td>Аккаунт на GitHub и публичный репозиторий. Google Cloud не нужен</td><td>Ничего дополнительно</td></tr>
             <tr><td>Кто видит код страницы</td><td>Только саму страницу, как на любом сайте</td><td>Весь репозиторий открыт: на бесплатном тарифе Pages работает только с публичными. Секретов там нет, но названия и логика видны</td><td>Только саму страницу</td></tr>
