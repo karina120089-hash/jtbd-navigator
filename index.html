@@ -119,6 +119,11 @@ details.step[open] .num{background:var(--strong);border-color:var(--strong);colo
 .tbl th,.tbl td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
 .tbl th{font-weight:700;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.08em}
 .tbl td:first-child{width:42%}
+.cmp>summary{cursor:pointer;font-size:14px;font-weight:600;text-decoration:underline;text-underline-offset:2px;width:max-content;max-width:100%}
+.cmp .tbl{margin-top:10px;background:var(--bg);border-radius:8px}
+.cmp .tbl table{min-width:680px;font-size:13px}
+.cmp .tbl td:first-child{width:auto;font-weight:700;white-space:nowrap}
+.cmp .tbl tbody tr:last-child td{border-bottom:0}
 .stuck-body h3{font:700 14px/1.3 var(--f-body);margin:8px 0 0}
 .shots{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
 .shots figure{margin:0;min-width:0}
@@ -300,6 +305,23 @@ dialog#zoom::backdrop{background:rgba(36,37,37,.78)}
         <button class="opt" data-v="github">GitHub Pages<small>имя.github.io — для внутренних</small></button>
         <button class="opt" data-v="gas">Ссылка Apps Script<small>если Google Cloud недоступен</small></button>
       </div>
+      <p class="q-hint">Во всех трёх вариантах данные и ИИ работают одинаково: страница обращается к вашему Apps Script, а ключ Gemini лежит в свойствах скрипта. Отличается только то, откуда открывается сама страница.</p>
+      <details class="cmp">
+        <summary>Чем отличаются варианты</summary>
+        <div class="tbl"><table>
+          <thead><tr><th></th><th>Firebase</th><th>GitHub Pages</th><th>Ссылка Apps Script</th></tr></thead>
+          <tbody>
+            <tr><td>Адрес</td><td>Короткий: <code>romashka.web.app</code></td><td>Короткий: <code>команда.github.io/romashka</code></td><td>Длинный: <code>script.google.com/macros/s/…/exec</code></td></tr>
+            <tr><td>Чей аккаунт</td><td>Google-аккаунт клиента — тот же, где скрипт. Всё остаётся у клиента</td><td>Аккаунт GitHub команды, не клиента</td><td>Google-аккаунт клиента — сам скрипт</td></tr>
+            <tr><td>Что нужно настроить</td><td>Проект Google Cloud и Firebase. Если Google не даёт создать проект (нет России в списке стран) — вариант не подойдёт</td><td>Аккаунт на GitHub и публичный репозиторий. Google Cloud не нужен</td><td>Ничего дополнительно</td></tr>
+            <tr><td>Кто видит код страницы</td><td>Только саму страницу, как на любом сайте</td><td>Весь репозиторий открыт: на бесплатном тарифе Pages работает только с публичными. Секретов там нет, но названия и логика видны</td><td>Только саму страницу</td></tr>
+            <tr><td>Как выглядит</td><td>Обычный сайт</td><td>Обычный сайт</td><td>Сверху серая полоса Google «Это приложение создано пользователем Apps Script»</td></tr>
+            <tr><td>Несколько Google-аккаунтов в браузере</td><td>Не мешают</td><td>Не мешают</td><td>Может не открыться или не работать кнопки — лечится окном инкогнито</td></tr>
+            <tr><td>ИИ (Gemini, GigaChat)</td><td>Работает. Долгие ответы страница дожидается сама, в том числе в Safari</td><td>Так же, как Firebase</td><td>Работает, обращение к скрипту напрямую</td></tr>
+            <tr><td>Когда выбирать</td><td><b>Страницы для клиентов</b></td><td><b>Внутренние инструменты и инструкции</b>, когда не страшно, что код открыт</td><td><b>Запасной вариант</b>: быстро показать или когда Google Cloud недоступен</td></tr>
+          </tbody>
+        </table></div>
+      </details>
     </div>
   </section>
 
