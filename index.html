@@ -1,0 +1,939 @@
+<!doctype html>
+<html lang="ru">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Навигатор живых страниц</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=Unbounded:wght@500;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one reading column; ABC for newcomers, questions, the route as numbered cards, then send-to-AI and troubleshooting */
+:root{
+  --bg:#f5f6f9; --surface:#ffffff; --ink:#151a2b; --muted:#5a6178; --line:#dde1ea;
+  --accent:#2a4fc4; --accent-soft:#e6ecfb; --hand:#a15c00; --hand-soft:#fbefdc;
+  --ok:#1d7a4f; --ok-soft:#e1f3ea; --code-bg:#eef0f6;
+  --f-display:"Unbounded","Golos Text",system-ui,sans-serif;
+  --f-body:"Golos Text",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#10131c; --surface:#181c28; --ink:#e8ebf3; --muted:#9aa2b8; --line:#2a3042;
+  --accent:#8ea8ff; --accent-soft:#222c4d; --hand:#f0b65a; --hand-soft:#3a2c14;
+  --ok:#6fd3a2; --ok-soft:#173527; --code-bg:#121622; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#10131c; --surface:#181c28; --ink:#e8ebf3; --muted:#9aa2b8; --line:#2a3042;
+  --accent:#8ea8ff; --accent-soft:#222c4d; --hand:#f0b65a; --hand-soft:#3a2c14;
+  --ok:#6fd3a2; --ok-soft:#173527; --code-bg:#121622; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:15px/1.55 var(--f-body);margin:0;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:32px 64px}
+.wrap{max-width:820px;margin:0 auto;display:grid;gap:28px}
+h1{font:700 clamp(24px,4.4vw,34px)/1.15 var(--f-display);margin:0;text-wrap:balance;letter-spacing:-.01em}
+h2{font:500 18px/1.3 var(--f-display);margin:0;text-wrap:balance}
+.lead{color:var(--muted);max-width:64ch;margin:8px 0 0}
+.legend{display:flex;flex-wrap:wrap;gap:8px 16px;font-size:13px;color:var(--muted);margin-top:14px}
+.badge{display:inline-flex;align-items:center;gap:6px;font:600 11.5px/1 var(--f-body);letter-spacing:.04em;text-transform:uppercase;padding:5px 8px;border-radius:6px;white-space:nowrap}
+.b-hand{background:var(--hand-soft);color:var(--hand)}
+.b-ai{background:var(--accent-soft);color:var(--accent)}
+.b-opt{background:var(--ok-soft);color:var(--ok)}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px}
+
+/* ABC */
+details.abc>summary,details.stuck>summary{list-style:none;cursor:pointer;padding:16px 20px;display:flex;justify-content:space-between;align-items:center;gap:12px}
+details.abc>summary::-webkit-details-marker,details.stuck>summary::-webkit-details-marker{display:none}
+.chev{color:var(--muted);font-size:13px;white-space:nowrap}
+details[open]>summary .chev::after{content:" — свернуть"}
+details:not([open])>summary .chev::after{content:" — открыть"}
+.abc-body,.stuck-body{padding:0 20px 20px;display:grid;gap:16px}
+.flow{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;counter-reset:fl}
+.fl{border:1px solid var(--line);border-radius:10px;padding:12px;background:var(--bg);position:relative;min-width:0}
+.fl b{display:block;font-size:14px}
+.fl span{font-size:13px;color:var(--muted)}
+.fl:not(:last-child)::after{content:"→";position:absolute;right:-12px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:14px;background:var(--surface);line-height:1}
+.gl{display:grid;grid-template-columns:200px 1fr;gap:8px 16px;margin:0;font-size:14px}
+.gl dt{font-weight:600}
+.gl dd{margin:0;color:var(--ink)}
+@media (max-width:640px){.flow{grid-template-columns:1fr 1fr}.fl:nth-child(2)::after{display:none}.gl{grid-template-columns:1fr;gap:2px}.gl dd{margin-bottom:8px}}
+
+/* questions */
+.qs{padding:20px;display:grid;gap:22px}
+.q{display:grid;gap:8px}
+.q-title{font-weight:600}
+.q-hint{font-size:13.5px;color:var(--muted);margin:0}
+.opts{display:flex;flex-wrap:wrap;gap:8px}
+.opt{font:500 14px/1 var(--f-body);color:var(--ink);background:transparent;border:1px solid var(--line);border-radius:8px;padding:10px 14px;cursor:pointer;text-align:left}
+.opt small{display:block;font-weight:400;font-size:12.5px;color:var(--muted);margin-top:4px;line-height:1.3}
+.opt:hover{border-color:var(--accent)}
+.opt[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--surface)}
+.opt[aria-pressed="true"] small{color:color-mix(in srgb,var(--surface) 82%,transparent)}
+.opt:focus-visible,.copy:focus-visible,summary:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.multi .opt[aria-pressed="true"]::before{content:"✓ "}
+select{font:500 14px/1.2 var(--f-body);color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px 12px;max-width:100%}
+.example{font-size:13.5px;background:var(--bg);border-radius:8px;padding:9px 12px}
+.helper{border-left:3px solid var(--accent);background:var(--accent-soft);border-radius:0 8px 8px 0;padding:12px 14px;font-size:14px}
+.helper table{border-collapse:collapse;width:100%}
+.helper td{padding:5px 8px 5px 0;vertical-align:top;border-top:1px solid var(--line)}
+.helper tr:first-child td{border-top:0}
+.yes{color:var(--ok);font-weight:600;white-space:nowrap}
+.no{color:var(--muted);font-weight:600;white-space:nowrap}
+
+/* route */
+.route-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
+.count{color:var(--muted);font-size:13.5px;font-variant-numeric:tabular-nums}
+.steps{display:grid;gap:12px;counter-reset:step}
+details.step{background:var(--surface);border:1px solid var(--line);border-radius:12px}
+details.step.opt-step{border-color:color-mix(in srgb,var(--ok) 45%,var(--line))}
+details.step>summary{list-style:none;cursor:pointer;display:grid;grid-template-columns:36px 1fr auto;gap:12px;align-items:center;padding:14px 16px}
+details.step>summary::-webkit-details-marker{display:none}
+.num{counter-increment:step;width:32px;height:32px;border-radius:50%;border:1.5px solid var(--line);display:grid;place-items:center;font:600 14px/1 var(--f-body);font-variant-numeric:tabular-nums}
+.num::before{content:counter(step)}
+details.step[open] .num{background:var(--ink);border-color:var(--ink);color:var(--surface)}
+.s-title{font-weight:600;min-width:0}
+.s-sub{display:block;font-weight:400;font-size:13px;color:var(--muted)}
+.s-badges{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.body{padding:0 16px 18px 64px;display:grid;gap:14px;min-width:0}
+.block-label{font:600 11.5px/1 var(--f-body);text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:6px}
+.body ol,.body ul{margin:0;padding-left:20px;display:grid;gap:5px}
+.where{font-size:14px}
+a{color:var(--accent)}
+code{font:13px/1.4 var(--f-mono);background:var(--code-bg);padding:1px 5px;border-radius:4px}
+.explain{font-size:14px;border-left:3px solid var(--accent);background:var(--accent-soft);border-radius:0 8px 8px 0;padding:10px 12px}
+.prompt{position:relative;background:var(--code-bg);border:1px solid var(--line);border-radius:8px;padding:12px 14px}
+.prompt pre{margin:0;white-space:pre-wrap;word-break:break-word;font:13px/1.55 var(--f-mono);color:var(--ink);padding-right:96px}
+.copy{position:absolute;top:8px;right:8px;font:600 12.5px/1 var(--f-body);background:var(--surface);color:var(--accent);border:1px solid var(--line);border-radius:6px;padding:7px 10px;cursor:pointer}
+.result{display:flex;gap:8px;align-items:flex-start;font-size:14px;background:var(--ok-soft);color:var(--ink);border-radius:8px;padding:10px 12px}
+.result b{color:var(--ok);white-space:nowrap}
+.warn{font-size:14px;background:var(--hand-soft);border-radius:8px;padding:10px 12px}
+.checks label{display:flex;gap:10px;align-items:flex-start;cursor:pointer}
+.checks input{margin-top:4px;accent-color:var(--accent)}
+.tbl{overflow-x:auto}
+.tbl table{border-collapse:collapse;width:100%;font-size:14px;min-width:520px}
+.tbl th,.tbl td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+.tbl th{font-weight:600;color:var(--muted);font-size:12.5px;text-transform:uppercase;letter-spacing:.04em}
+.tbl td:first-child{width:42%}
+.shots{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+.shots figure{margin:0;min-width:0}
+.shot{padding:0;border:1px solid var(--line);border-radius:8px;overflow:hidden;cursor:zoom-in;background:var(--bg);display:block;width:100%}
+.shot img{display:block;width:100%;height:auto}
+.shot:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.shots figcaption{font-size:12.5px;line-height:1.35;color:var(--muted);margin-top:5px}
+dialog#zoom{max-width:min(1100px,96vw);width:100%;padding:12px;border:0;border-radius:12px;background:var(--surface);color:var(--ink)}
+dialog#zoom img{width:100%;height:auto;display:block;border-radius:6px}
+dialog#zoom p{margin:10px 2px 4px;font-size:14px;display:flex;justify-content:space-between;gap:12px;align-items:center}
+dialog#zoom::backdrop{background:rgba(10,12,20,.72)}
+.stuck-body h3{font:600 14px/1.3 var(--f-body);margin:6px 0 0}
+
+/* send to AI */
+.send{padding:20px;display:grid;gap:16px}
+.form{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.field{display:grid;gap:5px;min-width:0;align-content:start}
+.field.wide{grid-column:1/-1}
+.field span{font-weight:600;font-size:14px}
+.field small{color:var(--muted);font-size:12.5px}
+.field input,.field textarea{font:14px/1.45 var(--f-body);color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:9px 11px;width:100%}
+.field textarea{min-height:76px;resize:vertical}
+.field input:focus,.field textarea:focus{outline:2px solid var(--accent);outline-offset:0;border-color:var(--accent)}
+.send-row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.big{font:600 15px/1 var(--f-body);background:var(--accent);color:var(--surface);border:0;border-radius:8px;padding:13px 18px;cursor:pointer}
+.ghost{font:500 14px/1 var(--f-body);background:transparent;color:var(--muted);border:1px solid var(--line);border-radius:8px;padding:12px 14px;cursor:pointer}
+.big:focus-visible,.ghost:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.saved{color:var(--ok);font-size:13.5px}
+.peek>summary{color:var(--accent);font-size:14px;cursor:pointer}
+.peek pre{margin:10px 0 0;max-height:360px;overflow:auto;white-space:pre-wrap;word-break:break-word;font:12.5px/1.5 var(--f-mono);background:var(--code-bg);border-radius:8px;padding:12px}
+@media (max-width:560px){
+  .form{grid-template-columns:1fr}
+  details.step>summary{grid-template-columns:32px 1fr}
+  .s-badges{grid-column:2;justify-content:flex-start}
+  .body{padding:0 14px 16px 14px}
+  .prompt pre{padding-right:0;padding-top:30px}
+}
+@media (prefers-reduced-motion:no-preference){details.step[open] .body{animation:in .18s ease-out}@keyframes in{from{opacity:.4;transform:translateY(-3px)}to{opacity:1;transform:none}}}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Навигатор живых страниц</h1>
+    <p class="lead">Для любой живой страницы на Google: дашборд, форма со сводкой, карточка по поиску, карта документов, ИИ-помощник. Для клиента или для нас самих. Ответьте на вопросы, и ниже соберётся маршрут: где что нажать и что написать ИИ. В конце можно отправить весь маршрут своему ИИ одним сообщением.</p>
+    <div class="legend">
+      <span><span class="badge b-hand">Руками</span> делаете вы в браузере</span>
+      <span><span class="badge b-ai">Пишет ИИ</span> копируете промт в Claude или ChatGPT</span>
+      <span><span class="badge b-opt">Модуль</span> появился из-за вашего ответа</span>
+    </div>
+  </header>
+
+  <details class="abc card" id="abc">
+    <summary><h2>Азбука: из чего состоит такая страница</h2><span class="chev"></span></summary>
+    <div class="abc-body">
+      <div class="flow" aria-label="Как устроена живая страница">
+        <div class="fl"><b>Источник</b><span>Google Таблица, Битрикс24, Диск, любая система с API, выгрузка из 1С или то, что люди вводят сами</span></div>
+        <div class="fl"><b>Apps Script</b><span>бесплатный сервер Google: забирает данные, считает, хранит секреты</span></div>
+        <div class="fl"><b>Страница</b><span>файл index.html на Firebase, GitHub или в самом скрипте</span></div>
+        <div class="fl"><b>Человек</b><span>открывает ссылку, жмёт «Обновить» и видит свежее</span></div>
+      </div>
+      <dl class="gl">
+        <dt>Apps Script</dt><dd>Программа на серверах Google, привязанная к одному Google-аккаунту. Код пишет ИИ-агент. От вас нужно нажать «Выполнить» и дать доступ.</dd>
+        <dt>Code.gs</dt><dd>Логика: откуда брать данные, что посчитать, что сохранить.</dd>
+        <dt>index.html</dt><dd>Сама страница, то есть всё, что видит человек: вёрстка, цвета, кнопки. Именно его показываем клиенту как прототип.</dd>
+        <dt>Часовой пояс</dt><dd>Настройка проекта скрипта (файл appsscript.json). Ставится по городу клиента: Москва — Europe/Moscow, Екатеринбург — Asia/Yekaterinburg, Красноярск — Asia/Krasnoyarsk. От пояса зависят даты, «сегодня», просрочки и время запуска по расписанию. Если пояс не тот, даты съезжают на день.</dd>
+        <dt>Свойства скрипта</dt><dd>Сейф скрипта: ключ Gemini, вебхук Битрикса, ID таблиц. Вносит их человек руками. В коде, в чате и в таблицах их быть не должно.</dd>
+        <dt>Развёртывание, ссылка /exec</dt><dd>Публикация скрипта. Ссылка /exec — адрес, по которому страница получает данные. Если обновлять то же развёртывание, ссылка не меняется.</dd>
+        <dt>Триггер</dt><dd>Запуск по расписанию, например «раз в час забрать данные из Битрикса».</dd>
+        <dt>Google Cloud Console</dt><dd>Пульт сервисов Google. Здесь создают проект, ключ Gemini и подключают Firebase.</dd>
+        <dt>Firebase Hosting</dt><dd>Бесплатный короткий адрес для страницы: имя.web.app. Страница там — витрина, а данные она берёт у скрипта.</dd>
+        <dt>GitHub Pages</dt><dd>То же самое на GitHub, адрес вида имя.github.io/проект. Удобно для внутренних инструментов.</dd>
+        <dt>Вебхук Битрикса</dt><dd>Секретная ссылка, по которой скрипт читает Битрикс без логина. Кто её знает, тот видит данные.</dd>
+        <dt>API</dt><dd>Вход в систему для программ. Система даёт ключ, по нему скрипт сам забирает данные. Российские программы иногда пускают к API только из России — тогда вместо API делают выгрузку файлом.</dd>
+        <dt>Ключ API</dt><dd>Пароль к API. Например, по ключу Gemini понимает, чей запрос и в чьи лимиты его записать.</dd>
+        <dt>clasp, firebase-tools</dt><dd>Программы, которыми ИИ-агент заливает код. Сами вы их не запускаете, только подтверждаете вход в браузере.</dd>
+        <dt>Окно инкогнито</dt><dd>Главный приём: в нём открыт только один Google-аккаунт. Половина ошибок — от того, что в браузере открыт «не тот» аккаунт.</dd>
+      </dl>
+    </div>
+  </details>
+
+  <section class="qs card" aria-label="Вопросы">
+    <div class="q">
+      <div class="q-title">1. Вы уже делали такие страницы?</div>
+      <div class="opts" data-q="level">
+        <button class="opt" data-v="new">Нет, впервые<small>к каждому шагу добавится «Что это и зачем»</small></button>
+        <button class="opt" data-v="pro">Да, уже делал(а)<small>только действия и промты</small></button>
+      </div>
+    </div>
+    <div class="q">
+      <div class="q-title">2. Что строим?</div>
+      <div class="opts" data-q="type">
+        <button class="opt" data-v="dash">Дашборд<small>цифры, графики, фильтры</small></button>
+        <button class="opt" data-v="form">Форма + сводка<small>люди заполняют, ведущий видит итог</small></button>
+        <button class="opt" data-v="lookup">Карточка по поиску<small>ввёл фамилию — получил сводный лист</small></button>
+        <button class="opt" data-v="map">Карта / реестр<small>документы, процессы, статусы</small></button>
+        <button class="opt" data-v="assistant">ИИ-помощник<small>вставил текст — ИИ разобрал</small></button>
+      </div>
+      <div class="example" id="type-ex"></div>
+    </div>
+    <div class="q">
+      <div class="q-title">3. Для кого?</div>
+      <div class="opts" data-q="who">
+        <button class="opt" data-v="client">Для клиента<small>всё на Google-аккаунте клиента</small></button>
+        <button class="opt" data-v="internal">Для нас<small>внутренний инструмент на аккаунте JTBD</small></button>
+      </div>
+    </div>
+    <div class="q">
+      <div class="q-title">4. Каким ИИ пользуетесь?</div>
+      <div class="opts" data-q="agent">
+        <button class="opt" data-v="claude">Claude<small>Claude Code в VS Code</small></button>
+        <button class="opt" data-v="codex">ChatGPT<small>Codex в VS Code или в приложении</small></button>
+      </div>
+    </div>
+    <div class="q">
+      <div class="q-title">5. Откуда берутся данные? <span class="q-hint" style="font-weight:400">можно несколько</span></div>
+      <div class="opts multi" data-q="src">
+        <button class="opt" data-v="sheet">Google Таблица</button>
+        <button class="opt" data-v="bitrix">Битрикс24</button>
+        <button class="opt" data-v="drive">Папка Google Диска<small>документы, файлы</small></button>
+        <button class="opt" data-v="input">Вводят на странице<small>формы, анкеты</small></button>
+        <button class="opt" data-v="api">Другая система с API<small>amoCRM, YouGile, сервисы с ключом</small></button>
+        <button class="opt" data-v="file">Выгрузка файлом<small>1С и системы без API</small></button>
+      </div>
+      <div class="warn" style="font-size:13.5px"><b>Про API — важно.</b> Данные можно забирать из любой программы, у которой есть API. API — это вход в систему для программ: система даёт ключ, по нему скрипт сам забирает данные, как сейчас из Битрикса. Но российские программы иногда пускают к API только из России, а скрипт Google работает с зарубежных серверов. Тогда остаётся только выгрузка файлом — как, например, из 1С: программа сама по расписанию сохраняет отчёт в папку Google Диска, скрипт берёт свежий файл.</div>
+    </div>
+    <div class="q">
+      <div class="q-title">6. Нужен ИИ внутри страницы, чтобы разбирать текст (Gemini)?</div>
+      <p class="q-hint">Пример — кнопка «Разобрать встречу»: вставил транскрипт, получил оценку; или автоматическая привязка задач к бизнес-процессам.</p>
+      <div class="opts" data-q="ai">
+        <button class="opt" data-v="yes">Да</button>
+        <button class="opt" data-v="no">Нет</button>
+        <button class="opt" data-v="unsure">Пока не знаю</button>
+      </div>
+      <div class="helper" id="ai-helper" hidden>
+        <table>
+          <tr><td>Разобрать транскрипт встречи, интервью, звонка</td><td class="yes">Нужен</td></tr>
+          <tr><td>Свести сотни комментариев или ответов анкеты в темы</td><td class="yes">Нужен</td></tr>
+          <tr><td>Отнести задачи или решения к процессам, категориям</td><td class="yes">Нужен</td></tr>
+          <tr><td>Ответить на вопрос по документам («Спросить ИИ»)</td><td class="yes">Нужен</td></tr>
+          <tr><td>Написать вывод «что важно на этой неделе» по цифрам</td><td class="yes">Можно</td></tr>
+          <tr><td>Посчитать суммы, часы, проценты, построить график</td><td class="no">Не нужен</td></tr>
+          <tr><td>Фильтры, поиск по фамилии, подсветка просрочек</td><td class="no">Не нужен</td></tr>
+        </table>
+        <p style="margin:8px 0 0">Если есть хоть одна задача из «Нужен», нажмите «Да», иначе — «Нет».</p>
+      </div>
+      <div class="q" id="provider-q" hidden style="margin-top:6px">
+        <div class="q-title" style="font-weight:500">6а. Можно ли отправлять эти тексты в Google?</div>
+        <p class="q-hint">На бесплатном тарифе Gemini Google может использовать тексты для улучшения моделей. Для клиента — спросите клиента.</p>
+        <div class="opts" data-q="provider">
+          <button class="opt" data-v="gemini">Да — Gemini</button>
+          <button class="opt" data-v="gigachat">Нет — GigaChat (Сбер)</button>
+        </div>
+      </div>
+    </div>
+    <div class="q">
+      <div class="q-title">7. Страница должна что-то записывать?</div>
+      <p class="q-hint">Ответы формы, договорённости, журнал использования. Если страница только показывает — «Нет».</p>
+      <div class="opts" data-q="write">
+        <button class="opt" data-v="yes">Да</button>
+        <button class="opt" data-v="no">Нет, только показывает</button>
+      </div>
+    </div>
+    <div class="q">
+      <label class="q-title" for="tz">8. Часовой пояс — где находится клиент или команда?</label>
+      <p class="q-hint">Даты, «сегодня», просрочки и время обновления по расписанию считаются в этом поясе.</p>
+      <select id="tz"></select>
+    </div>
+    <div class="q">
+      <div class="q-title">9. Где будет жить страница?</div>
+      <div class="opts" data-q="host">
+        <button class="opt" data-v="firebase">Firebase<small>имя.web.app — для клиентов</small></button>
+        <button class="opt" data-v="github">GitHub Pages<small>имя.github.io — для внутренних</small></button>
+        <button class="opt" data-v="gas">Ссылка Apps Script<small>если Google Cloud недоступен</small></button>
+      </div>
+    </div>
+  </section>
+
+  <section aria-label="Маршрут">
+    <div class="route-head">
+      <h2>Ваш маршрут</h2>
+      <span class="count" id="count"></span>
+    </div>
+    <div class="steps" id="steps" style="margin-top:14px"></div>
+  </section>
+
+  <section class="send card" aria-label="Отправить маршрут ИИ">
+    <h2>Отправить маршрут своему ИИ</h2>
+    <p class="lead">Заполните карточку проекта. Данные сразу подставятся во все промты выше и сохранятся в этом браузере. Потом одна кнопка копирует весь маршрут одним сообщением: вставьте его в Claude или ChatGPT, открытый в папке проекта. Агент сохранит план в файл и поведёт вас по шагам.</p>
+    <div class="form" id="form"></div>
+    <div class="warn" id="secret-warn" hidden>Похоже на вебхук, ключ или пароль — уберите из карточки. Секреты кладутся только в свойства скрипта, руками.</div>
+    <div class="send-row">
+      <button class="big" id="copy-all" type="button">Скопировать весь маршрут как промт</button>
+      <button class="ghost" id="clear" type="button">Очистить карточку</button>
+      <span class="saved" id="saved" aria-live="polite"></span>
+    </div>
+    <details class="peek"><summary>Посмотреть, что скопируется</summary><pre id="preview"></pre></details>
+  </section>
+
+  <dialog id="zoom" aria-label="Скриншот"><img id="zoom-img" alt=""><p><span id="zoom-cap"></span><button class="ghost" id="zoom-close" type="button">Закрыть</button></p></dialog>
+
+  <details class="stuck card">
+    <summary><h2>Если застряли: частые ошибки и обходные пути</h2><span class="chev"></span></summary>
+    <div class="stuck-body" id="stuck"></div>
+  </details>
+</div>
+
+<script>
+"use strict";
+const DEFAULTS = {level:"new", type:"dash", who:"client", agent:"claude", src:["sheet"], ai:"no", provider:"gemini", write:"no", tz:"Europe/Moscow", host:"firebase"};
+let S = Object.assign({}, DEFAULTS);
+try { Object.assign(S, JSON.parse(localStorage.getItem("nav2-answers") || "{}")); } catch (e) {}
+if (!Array.isArray(S.src) || !S.src.length) S.src = ["sheet"];
+let done = {};
+try { done = JSON.parse(localStorage.getItem("nav-done") || "{}"); } catch (e) {}
+let C = {};
+try { C = JSON.parse(localStorage.getItem("nav-client") || "{}"); } catch (e) {}
+
+const TZ = [["Europe/Kaliningrad","Калининград (МСК−1)"],["Europe/Moscow","Москва (МСК)"],["Europe/Samara","Самара (МСК+1)"],
+  ["Asia/Yekaterinburg","Екатеринбург (МСК+2)"],["Asia/Omsk","Омск (МСК+3)"],["Asia/Novosibirsk","Новосибирск (МСК+4)"],
+  ["Asia/Krasnoyarsk","Красноярск (МСК+4)"],["Asia/Irkutsk","Иркутск (МСК+5)"],["Asia/Yakutsk","Якутск (МСК+6)"],
+  ["Asia/Vladivostok","Владивосток (МСК+7)"],["Asia/Magadan","Магадан (МСК+8)"]];
+const tzLabel = () => (TZ.find(t => t[0] === S.tz) || TZ[1])[1];
+const tzFull = () => `${tzLabel()}, ${S.tz}`;
+
+const TYPES = {
+  dash:{l:"Дашборд", d:"цифры, графики, фильтры",
+    ex:"Например: часы сотрудников по задачам из Битрикса; график стройки из Google Таблицы; показатели отдела с фильтрами по людям и периодам.",
+    tz:"## Вкладки и что на них\n- <Вкладка 1>: <плитки с цифрами, таблица, график>\n\n## Фильтры\n<сотрудник, период, проект, статус>",
+    proto:"дашборд: вкладки, плитки с цифрами, таблицы и фильтры как в ТЗ",
+    check:["Фильтры работают вместе, пустой результат — надписью, а не ошибкой"]},
+  form:{l:"Форма + сводка", d:"люди заполняют, ведущий видит итог",
+    ex:"Например: участники встречи заполняют рабочий лист, ведущий видит сводку по всем по отдельной ссылке с <code>?view=host</code>.",
+    tz:"## Поля формы\n- <вопрос> — <текст / выбор из списка / число>\n\n## Кто заполняет и кто видит сводку\n<участники по общей ссылке; ведущий — по отдельной ссылке>\n\n## Что в сводке\n<итоги по каждому вопросу, кто ещё не заполнил>",
+    proto:"форму для участников и отдельный экран сводки для ведущего (по ссылке с ?view=host)",
+    check:["Тестовый ответ виден в сводке ведущего; у участников кнопки сводки нет","Повторное открытие формы показывает уже введённое, а не пустую форму"]},
+  lookup:{l:"Карточка по поиску", d:"ввёл фамилию — получил сводный лист",
+    ex:"Например: технический лист клиента — ввёл фамилию, получил данные договора из Битрикса и договорённости из Таблицы.",
+    tz:"## По чему ищем\n<фамилия клиента / номер договора>\n\n## Блоки карточки и откуда каждый\n- <Блок 1>: <источник>\n- <Блок 2>: <источник>\n\n## Что можно дописывать на странице\n<кто вносит, что фиксируем: дата, автор, история правок>\n\n## Печать\n<нужна ли кнопка PDF со всеми развёрнутыми блоками>",
+    proto:"страницу поиска: поле поиска по фамилии и карточку из блоков, как в ТЗ",
+    check:["Поиск находит по части фамилии, с «ё» и «е», без учёта регистра"]},
+  map:{l:"Карта / реестр", d:"документы, процессы, статусы",
+    ex:"Например: карта бизнес-процессов и документов компании — файлы с Диска, статусы из Таблицы, задачи и встречи из Битрикса, Gemini связывает их с процессами.",
+    tz:"## Что на карте\n<процессы / документы / этапы>\n\n## Как сгруппировать\n<по блокам, по пути клиента>\n\n## Статусы и откуда они\n<какая колонка какой таблицы; своих оценок не ставим>\n\n## Поиск и фильтры\n<...>",
+    proto:"карту: группы, карточки с документами и статусами, поиск и фильтры",
+    check:["Статусы берутся из источника, а не придуманы; пустой статус показан как «не указан»","Новые файлы в папке появляются на странице после «Обновить»"]},
+  assistant:{l:"ИИ-помощник", d:"вставил текст — ИИ разобрал",
+    ex:"Например: помощник руководителя — вставляет транскрипт встречи один на один и получает разбор по критериям.",
+    tz:"## Что человек вставляет\n<транскрипт встречи, анкету, письмо>\n\n## Что ИИ возвращает\n<оценку по критериям, рекомендации, следующий шаг>\n\n## Критерии и примеры\n<файл критерии.md>\n\n## Что сохраняем\n<журнал запросов в Таблицу: кто, когда, оценка>",
+    proto:"помощника: поле для текста, кнопку, индикатор «ИИ думает» и пример ответа ИИ",
+    check:[]}
+};
+
+// Типичные ошибки и обходные пути — по шагам; общий список внизу собирается из них же
+const GOT = {
+  gas:{t:"Apps Script", rows:[
+    ["Вместо данных — страница входа Google","У веб-приложения доступ не «Все», а «Только у меня» или «Любой пользователь с аккаунтом Google». Сказать агенту или поменять в «Управление развёртываниями»"],
+    ["«Приложение не проверено Google»","Дополнительные настройки → Перейти на страницу (небезопасно). Скрипт ваш, это нормально"],
+    ["Агент пишет «User has not enabled the Apps Script API»","script.google.com/home/usersettings → Google Apps Script API → Вкл. Повторить через минуту"],
+    ["Агент просит войти (clasp login)","Выполнить команду, которую он даст. В браузере выбрать аккаунт скрипта. Много аккаунтов — скопировать ссылку в окно инкогнито"],
+    ["Даты съезжают на день, время на 2–4 часа","Часовой пояс проекта не совпадает с клиентом. ⚙ Настройки проекта → Часовой пояс. Агенту: «даты форматируй в поясе проекта»"],
+    ["Часовой пояс сам сбросился","clasp create перезаписывает appsscript.json. Проверить timeZone после создания проекта"],
+    ["После обновления поменялась ссылка /exec","Агент создал новое развёртывание. Обновлять старое: create-deployment -i с ID развёртывания"],
+    ["Открывается не тот аккаунт, «нет доступа»","Всё делать в окне инкогнито, войти только в аккаунт скрипта"],
+    ["Данные в таблице поменяли, а страница старая","Нажать «Обновить». Не помогло — сказать агенту сменить ключ кэша"]]},
+  bitrix:{t:"Битрикс24", rows:[
+    ["Задач или часов меньше, чем в отчёте Битрикса","Вебхук от обычного сотрудника видит только своё. Перевыпустить от администратора или служебного пользователя"],
+    ["Метод отвечает «insufficient scope»","В вебхуке нет нужного права (calendar, user, im…). Добавить право в тот же вебхук, ссылка не изменится"],
+    ["Сотрудник уволился — всё перестало работать","Вебхук был от его учётки. Делать вебхук от служебной учётки, которая не пропадёт"]]},
+  drive:{t:"Google Диск", rows:[
+    ["Скрипт пишет «нет доступа» к файлу или папке","Папку не открыли аккаунту скрипта. Открыть может только владелец или редактор папки"],
+    ["Видно не все файлы","Часть файлов лежит в другой папке или это ярлыки. Открыть доступ к общей верхней папке"]]},
+  api:{t:"Другая система с API", rows:[
+    ["401 или 403","У ключа нет нужных прав или он истёк. Перевыпустить с правами на чтение"],
+    ["Данных меньше, чем в системе","Система отдаёт порциями. Агенту: «забирай постранично»"],
+    ["429, слишком много запросов","Синхронизировать реже, ответ кэшировать"],
+    ["Скрипт не достучался, а из браузера работает","API пускает только из России или по списку IP, а серверы Google за рубежом. Выход — выгрузка файлом"]]},
+  file:{t:"Выгрузка файлом", rows:[
+    ["Файл новый, а данные старые","Скрипт берёт не тот файл. Агенту: «бери самый свежий по дате изменения»"],
+    ["Столбцы «поехали»","Кто-то поменял отчёт выгрузки. Согласовать неизменный формат"],
+    ["Excel не читается","Агенту: «конвертируй xlsx в Google Таблицу через Drive» или настроить выгрузку в CSV"],
+    ["Выгрузка перестала приходить","На странице должна быть плашка «файл не обновлялся больше суток»; написать администратору системы"]]},
+  gemini:{t:"Ключ Gemini и Google Cloud", rows:[
+    ["Проект не создаётся, в названии русские буквы","Название проекта только латиницей: client-ai"],
+    ["AI Studio: «permission denied», проект не создаётся","Не приняты условия Google Cloud. Окно инкогнито → console.cloud.google.com под нужным аккаунтом → принять условия → создать проект на console.cloud.google.com/projectcreate"],
+    ["В окне условий нет страны клиента (России нет в списке)","Google Cloud не регистрирует новые аккаунты из России, решение за владельцем аккаунта. Обходные пути: ключ на аккаунте, где Cloud уже работает (например, JTBD); GigaChat вместо Gemini; страница на ссылке Apps Script или GitHub без Firebase"],
+    ["Новый проект не появляется в AI Studio","Не ждать. Создать ключ в Cloud Console: включить Gemini API → Credentials → API key. Или в AI Studio нажать Import project"],
+    ["Плашка «You have N projects remaining», проект не создаётся","Кончается лимит проектов на аккаунт. Не плодить проекты: ключ Gemini и Firebase держать в одном проекте, ненужные удалить"],
+    ["В списке API нет Gemini API","API не включён в этом проекте или вверху выбран другой проект. Library → Gemini API → Enable"],
+    ["При создании ключа требует служебный аккаунт","Создать прямо в окне: имя client-gemini, роли не выбирать → Create and close → выбрать его → Create"],
+    ["Баннер «Free Trial $300»","Dismiss. Для бесплатного Gemini карта не нужна"],
+    ["Несколько аккаунтов, всё «не то»","Только окно инкогнито с одним аккаунтом"]]},
+  giga:{t:"GigaChat", rows:[
+    ["401 при вызове","Ключ скопирован не целиком. Взять Authorization key в проекте заново"],
+    ["Ошибка SSL или сертификата","Google не доверяет сертификатам Сбера. Показать ошибку агенту и дать образец кода из нашего готового помощника по разбору встреч"]]},
+  aifn:{t:"Функция ИИ", rows:[
+    ["«не задан GEMINI_API_KEY»","Имя свойства — буква в букву, нажать «Сохранить свойства скрипта»"],
+    ["403, «API not enabled»","Включить Gemini API (Generative Language API) в Cloud Console"],
+    ["503, «overloaded»","Бесплатные модели перегружены. Нужна цепочка запасных моделей"],
+    ["429, дневной лимит кончился за час","Полная flash-модель на бесплатном тарифе быстро упирается в лимит. Брать flash-lite (свойство LLM_MODEL)"],
+    ["404 на модели","Взять имя из listModels в свойство LLM_MODEL"],
+    ["Ответ ИИ ломает таблицу или JSON","Агенту: «используй responseSchema в запросе к Gemini»"],
+    ["Safari «Load failed», а результат в таблице есть","Кэш по reqId и опрос каждые 5 секунд"]]},
+  firebase:{t:"Firebase", rows:[
+    ["Проект не создаётся","Название латиницей. Если просит условия Google Cloud и страну — тот же барьер, что у Gemini (см. выше)"],
+    ["Адрес получился с хвостом: имя-dba5e.web.app","Имя занято или Firebase добавил хвост. При создании нажать карандаш у ID и задать своё; после создания ID не меняется"],
+    ["«You're N projects away from the project limit»","Добавлять Firebase в уже существующий проект Cloud, а не создавать новый"],
+    ["Стран нет, Cloud недоступен","Выбрать в вопросе 9 GitHub Pages или ссылку Apps Script"],
+    ["Обновили, а люди видят старое","В firebase.json нужен Cache-Control: no-cache. У себя — Ctrl+Shift+R"],
+    ["Предлагает Google Analytics или тариф Blaze","Analytics выключить. Тариф Spark бесплатный, карта не нужна"],
+    ["firebase просит вход","npx firebase-tools login:add почта → подтвердить в браузере"]]},
+  github:{t:"GitHub Pages", rows:[
+    ["404 сразу после включения","Подождать 1–2 минуты и обновить"],
+    ["В Settings нет раздела Pages для репозитория","На бесплатном тарифе Pages работает только для публичных репозиториев"],
+    ["git просит логин и пароль","Пароль не подходит — нужен вход через браузер. Попросить агента провести через gh auth login"]]},
+  gashost:{t:"Ссылка Apps Script", rows:[
+    ["У человека ошибка или пустая страница","Он вошёл сразу в несколько Google-аккаунтов. Открыть в инкогнито. Часто — перейти на Firebase или GitHub"],
+    ["Кнопки не работают у части людей","Та же причина. Агенту: «вызывай сервер через fetch к /exec, а не google.script.run»"]]}
+};
+
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const ag = () => S.agent === "codex" ? "ChatGPT" : "Claude";
+const has = k => S.src.includes(k);
+const SECRET = /\/rest\/\d+\/\w+|AIza[\w-]{10,}|AQ\.[\w-]{20,}|password|пароль/i;
+
+const FIELDS = [
+  {k:"title", l:"Название страницы", ph:"Учёт времени по задачам"},
+  {k:"client", l:() => S.who === "client" ? "Компания клиента" : "Для кого внутри", ph:() => S.who === "client" ? "ООО «Ромашка»" : "Отдел продаж JTBD"},
+  {k:"email", l:"Google-аккаунт скрипта", ph:"name@gmail.com", hint:() => S.who === "client" ? "аккаунт клиента — всё останется у него" : "аккаунт JTBD для внутренних инструментов"},
+  {k:"fb", l:() => S.host === "github" ? "Имя репозитория" : "Адрес страницы", ph:"romashka-time",
+    hint:() => S.host === "github" ? "латиницей, станет …github.io/romashka-time" : "латиницей, станет romashka-time.web.app", show:() => S.host !== "gas"},
+  {k:"sheet", l:"Ссылка на Google Таблицу", ph:"https://docs.google.com/spreadsheets/d/…", wide:true, show:() => has("sheet")},
+  {k:"portal", l:"Портал Битрикс24", ph:"romashka.bitrix24.ru", hint:"только адрес портала, вебхук сюда не вписывать", wide:true, show:() => has("bitrix")},
+  {k:"drive", l:"Ссылка на папку Google Диска", ph:"https://drive.google.com/drive/folders/…", wide:true, show:() => has("drive")},
+  {k:"apiName", l:"Система с API и ссылка на её документацию", ph:"amoCRM, https://www.amocrm.ru/developers/…", hint:"ключ сюда не вписывать", wide:true, show:() => has("api")},
+  {k:"fileWhere", l:"Какая выгрузка и куда она падает", ph:"1С: отчёт «Продажи» в CSV, каждый день в 7:00, папка Диска «Выгрузки 1С»", wide:true, show:() => has("file")},
+  {k:"site", l:"Сайт для цветов и шрифта", ph:"romashka.ru", hint:"клиента или JTBD", wide:true},
+  {k:"questions", l:"Что человек должен сделать или узнать на странице", ph:"1. Какие проекты уходят в минус?\n2. Кто перегружен по часам?", area:true, wide:true},
+  {k:"aiTask", l:"Что делает ИИ внутри", ph:"Кнопка «Разобрать встречу»: вставляют транскрипт — получают оценку по критериям", area:true, wide:true, show:() => S.ai === "yes"},
+  {k:"writeWhat", l:"Что страница записывает", ph:"Ответы анкеты, договорённости, журнал использования", wide:true, show:() => S.write === "yes"}
+];
+const val = x => typeof x === "function" ? x() : x;
+const visibleFields = () => FIELDS.filter(f => !f.show || f.show());
+
+// Подставляет карточку в заглушки промтов; незаполненное остаётся <как было>
+function fill(t){
+  const map = [
+    [/<почта>/g, C.email],
+    [/<ссылка на таблицу>/g, C.sheet],
+    [/<портал>/g, C.portal],
+    [/<папка>/g, C.drive],
+    [/<система>/g, C.apiName],
+    [/<выгрузка>/g, C.fileWhere],
+    [/<имя>/g, C.fb],
+    [/<сайт>/g, C.site],
+    [/<название>/g, C.title],
+    [/<компания>/g, C.client],
+    [/<что делает ИИ>/g, C.aiTask],
+    [/<что записываем>/g, C.writeWhat],
+    [/<пояс>/g, tzFull()]
+  ];
+  return map.reduce((s, [re, v]) => v && v.trim() && !SECRET.test(v) ? s.replace(re, v.trim()) : s, t);
+}
+
+function steps() {
+  const L = [];
+  const codex = S.agent === "codex";
+  const sheet = has("sheet"), bitrix = has("bitrix"), drive = has("drive"), input = has("input"), api = has("api"), file = has("file");
+  const ext = sheet || bitrix || drive || api || file;
+  const giga = S.provider === "gigachat";
+  const client = S.who === "client";
+  const T = TYPES[S.type];
+  const srcLines = [
+    sheet ? "- Google Таблица: <ссылка на таблицу>, листы: <…>" : null,
+    bitrix ? "- Битрикс24: <портал> — <задачи / сделки / учёт времени / чаты встреч>" : null,
+    drive ? "- Google Диск: <папка>" : null,
+    api ? "- Система по API: <система> — <какие данные>" : null,
+    file ? "- Выгрузка файлом: <выгрузка>" : null,
+    input ? "- Вводят люди на странице: <что>" : null
+  ].filter(Boolean).join("\n");
+
+  L.push({id:"tz", title:"Техническое задание", sub:"с заказчиком или по записи встречи", who:["hand"],
+    explain:"ТЗ — короткий текст о том, что должна делать страница. Агент перечитывает его перед каждой задачей. Без ТЗ он угадывает, и правок становится втрое больше.",
+    actions:[
+      client ? "Заполнить шаблон ниже вместе с заказчиком или по записи встречи." : "Заполнить шаблон ниже вместе с тем, кто будет пользоваться страницей.",
+      "Сохранить как файл <code>ТЗ.md</code> в папке проекта. Если пользуетесь кнопкой внизу страницы, агент сделает это сам.",
+      "Есть расшифровка встречи (Plaud, Zoom) — положить её в папку и отдать ИИ вторым промтом."
+    ],
+    prompt:`# Страница: <название>
+Тип: ${T.l} — ${T.d}
+Для кого: ${client ? "клиент <компания>" : "внутренний инструмент JTBD, <компания>"}
+Google-аккаунт, где всё будет жить: <почта>
+Кто пользуется: <должность / роль>, как часто: <каждый день / на планёрке>, с чего: <ноутбук / телефон>
+Часовой пояс: <пояс>
+
+## Что человек должен сделать или узнать на странице
+1. <…>
+2. <…>
+
+## Источники данных
+${srcLines}
+Кто и как часто их заполняет: <…>
+
+${T.tz}
+
+## Чего НЕ надо
+<что вычеркнули>
+
+## Оформление
+Цвета и шрифт: <сайт>`,
+    prompt2:"В папке лежит расшифровка встречи. Заполни по ней шаблон ТЗ.md. Чего не хватает — выпиши отдельным списком вопросов.",
+    result:"Файл ТЗ.md: 3–5 пунктов «что человек делает или узнаёт на странице»."});
+
+  if (bitrix) L.push({id:"bitrix", opt:true, title:"Вебхук Битрикс24", sub:"делает администратор портала", who:["hand"],
+    explain:"Входящий вебхук — секретная ссылка, по которой скрипт читает Битрикс без логина и пароля. Кто знает ссылку, видит данные, поэтому она живёт только в свойствах скрипта.",
+    where:"Битрикс24 " + (client ? "клиента" : "компании"),
+    actions:[
+      "Попросить администратора: <b>Приложения → Разработчикам → Другое → Входящий вебхук</b>.",
+      "Права отметить по задаче: задачи — <code>task</code>, сотрудники — <code>user</code>, отделы — <code>department</code>, группы — <code>sonet_group</code>, CRM — <code>crm</code>, календари — <code>calendar</code>, чаты — <code>im</code>, диск — <code>disk</code>.",
+      "Вебхук — <b>от администратора или служебной учётки</b>. Вебхук обычного сотрудника видит только его задачи: у одного клиента так «потерялись» около 170 из 690 часов.",
+      "Ссылка вебхука — это пароль. Не пересылать в общие чаты, не вписывать в таблицы и в чат с ИИ."
+    ],
+    got:"bitrix",
+    result:"У вас есть ссылка вида https://портал.bitrix24.ru/rest/ID/код/"});
+
+  if (drive) L.push({id:"drive", opt:true, title:"Доступ к папке Google Диска", sub:"делает владелец папки", who:["hand"],
+    explain:"Скрипт работает от имени одного Google-аккаунта и видит только то, к чему у этого аккаунта есть доступ.",
+    where:'<a href="https://drive.google.com" target="_blank" rel="noopener">drive.google.com</a>',
+    actions:[
+      "Открыть папку → правой кнопкой → <b>Поделиться</b> → вписать почту аккаунта скрипта → роль <b>Читатель</b> (или <b>Редактор</b>, если скрипт будет создавать файлы) → Отправить.",
+      "Открыть доступ может только владелец папки или редактор. Если файлы лежат в разных папках — открыть общую верхнюю.",
+      "Ссылку на папку вписать в карточку внизу страницы."
+    ],
+    got:"drive",
+    result:"Аккаунт скрипта открывает папку и видит в ней файлы."});
+
+  if (api) L.push({id:"api", opt:true, title:"Ключ API другой системы", sub:"amoCRM, YouGile и любые сервисы с API", who:["hand"],
+    explain:"API — служебный вход в систему для программ, а ключ (токен) — пароль к нему. Если у системы есть API, скрипт сам забирает данные по расписанию, как с Битриксом.",
+    actions:[
+      "Проверить, есть ли у системы API: в настройках раздел «API», «Интеграции» или «Разработчикам». Можно спросить ИИ: «Есть ли у этой системы открытый API и как получить ключ?»",
+      "Создать ключ (токен) <b>только на чтение</b>, под администратором или служебной учёткой — не под сотрудником, который может уйти.",
+      "Ключ сохранить у себя. В свойства скрипта он ляжет на шаге Apps Script. В чат ИИ и в таблицы не пишем.",
+      "Ссылку на документацию API вписать в карточку внизу: по ней агент поймёт, как забирать данные."
+    ],
+    got:"api",
+    result:"Ключ на руках, ссылка на документацию в карточке."});
+
+  if (file) L.push({id:"file", opt:true, title:"Регулярная выгрузка файлом", sub:"когда у системы нет API или он закрыт", who:["hand"],
+    explain:"Если система не отдаёт данные программам, она может сама сохранять отчёт файлом по расписанию. Скрипт каждый раз берёт самый свежий файл. Так обычно подключают 1С.",
+    actions:[
+      "Попросить администратора системы (для 1С — программиста 1С) настроить автоматическую выгрузку нужного отчёта в Excel или CSV по расписанию, например каждый день в 7:00.",
+      "Куда: в папку Google Диска (программа «Google Диск для компьютера» на том компьютере, где работает выгрузка) или письмом на почту аккаунта скрипта.",
+      "Папку открыть аккаунту скрипта, как в шаге про Диск.",
+      "Договориться: в каждой выгрузке одни и те же названия столбцов, без объединённых ячеек и итоговых строк.",
+      "Программист 1С готов опубликовать HTTP-сервис или OData в интернет? Это уже API — отметьте в вопросе 5 «Другая система с API»."
+    ],
+    got:"file",
+    result:"Свежий файл сам появляется в папке или на почте по расписанию."});
+
+  if (ext) L.push({id:"data", title:"Проверка данных", sub:"ИИ забирает данные сам и находит дыры до программирования", who:["ai","hand"],
+    explain:"Агент смотрит на настоящие данные до того, как писать код. Так пустые ячейки, разное написание имён и ошибки формул видны сразу, а не на показе.",
+    actions:[
+      "Обычно ИИ-агент забирает данные сам — отправьте ему промт ниже.",
+      "<b>Руками — только если ваш инструмент не смог сам</b> (пишет, что нет доступа): " +
+        [sheet ? "Google Таблица → Файл → Скачать → Microsoft Excel (.xlsx)" : null,
+         bitrix ? "выгрузить из Битрикса отчёт за прошлый месяц в Excel" : null,
+         drive ? "выгрузить список файлов папки или скачать 3–5 типичных документов" : null,
+         api ? "выгрузить из системы пример данных в Excel" : null,
+         file ? "положить пример выгрузки" : null].filter(Boolean).join("; ") +
+        " → положить в папку проекта → повторить промт.",
+      client ? "Отчёт о проблемах отправить заказчику: чиним источник или страница их обходит." : "Проблемы в данных исправить в источнике или договориться, что страница их обходит."
+    ],
+    prompt:"Возьми данные сам: " +
+      [sheet ? "Google Таблица <ссылка на таблицу>" : null,
+       bitrix ? "Битрикс24 <портал> — <что именно> за прошлый месяц" : null,
+       drive ? "папка Google Диска <папка>" : null,
+       api ? "система <система> — изучи документацию API и скажи, какие данные оттуда можно забрать" : null,
+       file ? "пример выгрузки <выгрузка>" : null].filter(Boolean).join("; ") +
+      ". Если доступа нет — не гадай, скажи прямо, я выгружу файлы в папку проекта. Затем сверь с ТЗ.md и скажи: (1) откуда берём ответ на каждый пункт ТЗ; (2) каких данных не хватает; (3) проблемы качества: ошибки #REF!/#DIV/0!, разное написание одних и тех же имён, объединённые ячейки, пустые поля, даты текстом. Ничего не программируй, только отчёт.",
+    result:"Список: что откуда берём, чего нет, что исправить в источнике."});
+
+  L.push({id:"proto", title:"Прототип на демо-данных", sub:"согласовать вид до живых данных", who:["ai"],
+    explain:"Прототип — страница на выдуманных, но похожих данных. Это будущий index.html. Вид согласуем до того, как тратить время на подключение.",
+    prompt:`Прочитай ТЗ.md${ext ? " и отчёт о данных" : ""}. Сделай прототип: ${T.proto}. Одним файлом index.html на демо-данных, похожих на настоящие (те же названия полей, реалистичные значения). Данные держи в одном объекте в начале скрипта, в той же форме, в какой их потом будет отдавать Apps Script, — чтобы потом заменить только источник. Даты и время показывай в поясе <пояс>. Цвета и шрифт возьми с сайта <сайт>. Должно хорошо выглядеть на телефоне. ` +
+      (codex ? "Скажи, как открыть его у меня в браузере." : "Опубликуй как артефакт, чтобы показать " + (client ? "клиенту." : "команде.")),
+    actions:[
+      (client ? "Показать прототип клиенту" : "Показать тем, кто будет пользоваться") + ", собрать правки.",
+      "Одна правка — одно сообщение ИИ, с местом и результатом: «На вкладке Команда сделай фильтр по сотруднику, по умолчанию „Все“». Можно перетащить скриншот в чат.",
+      "Не писать «сделай красивее», «доработай»: ИИ угадывает и ломает то, что работало."
+    ],
+    result:(client ? "Клиент" : "Заказчик внутри") + " сказал «да, так». Переходим к живым данным."});
+
+  const reading = [
+    sheet ? "Таблицу <ссылка на таблицу> читай только на чтение, столбцы ищи по названию, а не по букве. " : "",
+    bitrix ? "Вебхук Битрикса я положу сам(а) в свойство скрипта BITRIX_HOOK — не проси его и не пиши в файлы. Синхронизация забирает <что именно> постранично и пишет в служебную таблицу (её создаёт скрипт, ID — в свойство SHEET_ID); триггер раз в час; кнопка «Обновить» запускает синхронизацию вне очереди; ошибки — письмом на <почта>. " : "",
+    drive ? "Файлы бери из папки <папка> (доступ аккаунту скрипта дан): название, ссылка, дата изменения. " : "",
+    api ? "Данные из <система> забирай по API: ключ я положу сам(а) в свойство API_KEY — не проси его и не пиши в файлы; по документации забирай постранично, пиши в служебную таблицу, синхронизация по триггеру и по кнопке «Обновить». " : "",
+    file ? "Выгрузку бери из <выгрузка>: каждый раз самый свежий файл, столбцы ищи по названию; если файл не обновлялся больше суток — показывай на странице предупреждение. " : "",
+    input ? "То, что вводят на странице, храни в Таблице (следующий шаг). " : ""
+  ].join("");
+  L.push({id:"gas", title:"Живые данные через Apps Script", sub:"сервер, который забирает и отдаёт данные", who:["ai","hand"],
+    explain:"Apps Script — бесплатный сервер Google внутри аккаунта. В проекте скрипта: <b>Code.gs</b> — логика (что забрать и посчитать), <b>index.html</b> — сама страница, <b>appsscript.json</b> — настройки, в том числе <b>часовой пояс</b>, <b>Свойства скрипта</b> — сейф для ключей и вебхуков. <b>Развёртывание</b> публикует скрипт и даёт постоянную ссылку /exec.",
+    prompt:`Подключаем живые данные. Создай в папке gas/ проект Apps Script через clasp под аккаунтом <почта>. Часовой пояс проекта — <пояс>: пропиши timeZone в appsscript.json и проверь его после clasp create (он перезаписывает этот файл); все даты форматируй в этом поясе. ${reading}` +
+      (S.host === "gas"
+        ? "Страницу отдаёт сам скрипт: doGet возвращает index.html через HtmlService, данные подставляй на сервере. "
+        : "По запросу doGet отдавай JSON ровно в форме демо-данных из index.html; страница грузит его через fetch. ") +
+      "Ответ кэшируй, чтобы страница открывалась быстро. Публикация — веб-приложение: запуск от имени владельца, доступ «Все» (Anyone). Залей код (clasp push), создай развёртывание и дай мне ссылку /exec и ссылку на редактор. На странице — кнопка «Обновить» и подпись «данные на дд.мм чч:мм». Ни одной цифры, имени или даты в коде страницы — только из данных.",
+    actions:[
+      "Агент пишет, что Apps Script API выключен, — открыть <a href=\"https://script.google.com/home/usersettings\" target=\"_blank\" rel=\"noopener\">script.google.com/home/usersettings</a> → «Google Apps Script API» → <b>Вкл.</b>",
+      "Агент просит войти — выполнить команду, которую он дал, и в браузере выбрать аккаунт скрипта.",
+      bitrix ? "Редактор скрипта → шестерёнка <b>«Настройки проекта»</b> → «Свойства скрипта» → «Добавить свойство»: <code>BITRIX_HOOK</code> = ссылка вебхука → «Сохранить свойства скрипта»." : null,
+      api ? "Там же «Добавить свойство»: <code>API_KEY</code> = ключ системы → «Сохранить свойства скрипта»." : null,
+      `Там же, в «Настройках проекта», проверить <b>Часовой пояс</b>: должно быть «${esc(tzLabel())}» (<code>${esc(S.tz)}</code>). По умолчанию там стоит пояс аккаунта, а не клиента — у нас на тесте был Екатеринбург.`,
+      "Открыть ссылку на редактор <b>в окне инкогнито</b> под аккаунтом скрипта.",
+      "Вверху выбрать функцию, которую назвал ИИ → <b>Выполнить</b> → «Требуется авторизация» → <b>Проверить разрешения</b>. Откроется <b>отдельное окно</b> — выбрать в нём аккаунт скрипта.",
+      "В отдельном окне (оно может открыться <b>позади</b> основного — проверьте панель окон) выбрать аккаунт скрипта. Дальше появится экран <b>«Приложение не проверено Google»</b> (Google hasn’t verified this app) с жёлтым треугольником и синей кнопкой «Назад к безопасной странице». Её <b>не нажимать</b>. Внизу слева мелкая ссылка <b>«Дополнительные настройки»</b> (Advanced) → ниже появится <b>«Перейти на страницу „название проекта“ (небезопасно)»</b> → откроется список того, что скрипт просит: таблицы, Диск, внешние сервисы. Отметить все галочки (или «Выбрать все») → <b>Разрешить</b> / Continue. Окно закроется само, функция запустится. Это нормально: «не проверено» значит, что скрипт ваш и Google его не проверял.",
+      "Если публикуете сами: <b>Начать развёртывание → Новое развёртывание</b> → тип «Веб-приложение» → запуск «От моего имени» → «У кого есть доступ»: <b>Все</b> → Начать развёртывание.",
+      S.host === "gas"
+        ? "Открыть ссылку <code>/exec</code> в инкогнито без входа: должна открыться страница с настоящими данными."
+        : "Открыть ссылку <code>/exec</code> в инкогнито без входа: должен быть текст в фигурных скобках <code>{…}</code> с настоящими данными."
+    ].filter(Boolean),
+    got:"gas",
+    shots:[["gas-1-files","Проект скрипта: Код.gs — логика, index.html — страница"],["gas-2-timezone","⚙ Настройки проекта → Часовой пояс"],["gas-3-properties","Свойства скрипта: имя слева, значение справа → «Сохранить свойства скрипта»"],["gas-4-run","Выбрать функцию → «Выполнить»"],["gas-5-auth","Первый запуск: «Проверить разрешения»"],["gas-6-deploy","Новое развёртывание: доступ «Все»"],["gas-7-api","script.google.com → Настройки: API включён"]],
+    result:"Ссылка /exec отдаёт настоящие данные" + (bitrix ? "; цифры сверены с отчётом Битрикса по 2–3 людям." : ".")});
+
+  if (S.write === "yes") L.push({id:"write", opt:true, title: S.type === "form" ? "Форма: ответы в Таблицу и сводка" : "Запись со страницы в Таблицу", sub:"страница сохраняет то, что ввели", who:["ai","hand"],
+    explain:"Страница отправляет данные скрипту, скрипт дописывает строку в Таблицу. Таблица становится базой, её видит владелец.",
+    prompt:(S.type === "form"
+        ? "Страница — форма: <что записываем>. Каждый участник — одна строка в листе «Ответы»; повторное открытие показывает уже введённое. Сводку для ведущего отдай по ссылке с ?view=host, у участников кнопки сводки нет. "
+        : "Страница должна записывать <что записываем> в Таблицу, на каждую сущность — свой лист. ") +
+      "Таблицу создаёт функция setup() и сохраняет её ID в свойство SHEET_ID. " +
+      (S.host === "gas" ? "Сервер вызывай через google.script.run. " : "Запросы со страницы — fetch POST с Content-Type text/plain (иначе Apps Script не пропустит), на сервере doPost. ") +
+      "Запись через LockService; значения, начинающиеся с = + - @, экранируй апострофом; длинные тексты обрезай до 49 000 символов; у каждой записи — дата, время и кто внёс. Залей и обнови развёртывание без смены ссылки.",
+    actions:[
+      "В редакторе скрипта выбрать <code>setup</code> → <b>Выполнить</b>, разрешить доступ. В «Журнале выполнения» появится ссылка на таблицу.",
+      "Таблица → «Настройки доступа»: «Ограниченный», добавить владельца по почте. <b>Не</b> «Все, у кого есть ссылка».",
+      "Отправить тестовую запись со страницы и найти её в таблице. Пометить «ТЕСТ — удалить».",
+      S.type === "form" ? "Открыть ссылку с <code>?view=host</code>: тестовый ответ виден в сводке." : null
+    ].filter(Boolean),
+    result:"Запись со страницы появляется строкой в нужном листе."});
+
+  if (S.ai === "yes") {
+    if (giga) L.push({id:"aikey", opt:true, title:"Ключ GigaChat", sub:"бесплатный тариф Сбера", who:["hand"],
+      explain:"Ключ — пароль, по которому GigaChat понимает, чей запрос. Работает из России, данные остаются в РФ.",
+      where:'<a href="https://developers.sber.ru/studio" target="_blank" rel="noopener">developers.sber.ru/studio</a>',
+      actions:[
+        "Войти через Сбер ID → создать проект <b>GigaChat API</b> (тариф Freemium).",
+        "В проекте → <b>Получить ключ</b> → скопировать <b>Authorization key</b>.",
+        "Редактор скрипта → шестерёнка «Настройки проекта» → «Свойства скрипта» → «Добавить свойство»: <code>LLM_PROVIDER</code> = <code>gigachat</code> и <code>GIGACHAT_AUTH_KEY</code> = ключ → «Сохранить свойства скрипта».",
+        "Ключ кладёт человек. В чат ИИ ключ не пишем."
+      ],
+      got:"giga",
+      result:"В свойствах скрипта два свойства: LLM_PROVIDER и GIGACHAT_AUTH_KEY."});
+    else L.push({id:"aikey", opt:true, title:"Ключ Gemini", sub:"бесплатный тариф Google", who:["hand"],
+      explain:"Ключ API — пароль, по которому Gemini понимает, чей запрос. Ключ всегда живёт внутри проекта Google Cloud, поэтому сначала создаём проект. Google Cloud Console — пульт управления сервисами Google.",
+      where:'<a href="https://console.cloud.google.com/projectcreate" target="_blank" rel="noopener">console.cloud.google.com/projectcreate</a>, <b>в окне инкогнито</b>, только аккаунт скрипта',
+      actions:[
+        "Открыть ссылку выше. Появилось окно с выбором страны и условиями — это первый вход в Google Cloud, его нужно пройти (если страны нет в списке — см. «Если не получается»).",
+        "Название проекта <b>латиницей</b>: <code>client-ai</code>, «No organization» → <b>Create</b>. Подождать полминуты. Баннер «Free Trial $300» — <b>Dismiss</b>. Жёлтая плашка «You have N projects remaining» — это лимит проектов на аккаунт: лишних не создавать.",
+        "Вверху выбран новый проект → меню ☰ → <b>APIs & Services → Library</b> → найти <code>Gemini API</code> (раньше назывался Generative Language API) → <b>Enable</b>.",
+        "<b>APIs & Services → Credentials → Create credentials → API key</b> → имя ключа, в «Select API restrictions» отметить <b>Gemini API</b> → OK.",
+        "Ниже «Service account» → <b>Select a service account → Create new account</b> (откроется новая вкладка): имя <code>client-gemini</code> → Create and continue → роли не выбирать → Continue → <b>Done</b>.",
+        "Вернуться на вкладку с ключом → <b>Refresh</b> → отметить <code>client-gemini</code> → <b>Select</b> → внизу <b>Create</b>. Скопировать ключ: новые ключи начинаются на <code>AQ.</code>, старые — на <code>AIza</code>.",
+        "Редактор скрипта → шестерёнка «Настройки проекта» → «Свойства скрипта» → «Добавить свойство»: <code>GEMINI_API_KEY</code> = ключ → «Сохранить свойства скрипта». В чат ИИ ключ не пишем.",
+        'Короткий путь: <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a> → Create API key. Если пишет «permission denied» или проекта нет в списке — идти через Cloud Console, как выше.'
+      ],
+      got:"gemini",
+      shots:[["cloud-1-project","Новый проект: имя латиницей → Create"],["cloud-2-enable","Library → Gemini API → Enable"],["cloud-3-create","Credentials → Create credentials → API key"],["cloud-4-restrict","Ограничить ключ: отметить Gemini API"],["cloud-5-sa-button","Ключу нужен служебный аккаунт"],["cloud-6-sa-create","Создать служебный аккаунт: имя → Create and continue"],["cloud-7-sa-roles","Роли не нужны → Continue → Done"],["cloud-8-sa-pick","Refresh → выбрать аккаунт → Select"],["cloud-9-key","Ключ создан — скопировать (на снимке скрыт)"]],
+      result:"В свойствах скрипта есть GEMINI_API_KEY."});
+
+    L.push({id:"aifn", opt:true, title: giga ? "Функция ИИ на GigaChat" : "Функция ИИ на Gemini", sub:"ИИ-агент пишет, вы проверяете", who:["ai","hand"],
+      explain:"Скрипт отправляет текст в модель и получает ответ. Делаем это на сервере, чтобы ключ не попал в браузер.",
+      prompt:`Добавь функцию: <что делает ИИ>. ИИ — ${giga ? "GigaChat (LLM_PROVIDER = gigachat, ключ в свойстве GIGACHAT_AUTH_KEY; сертификатам Сбера Google не доверяет — учти это при вызове)" : "Gemini, ключ в свойстве скрипта GEMINI_API_KEY, модель по умолчанию — самая новая flash-lite (полная flash на бесплатном тарифе быстро упирается в дневной лимит), имя можно переопределить свойством LLM_MODEL"}. Ключ не проси у меня и не клади в HTML. Вызов только с сервера Apps Script через UrlFetchApp.${giga ? "" : " Сделай цепочку запасных моделей на случай ошибки 503; если ждёшь от модели JSON — задай responseSchema."} Если разбор массовый — обрабатывай пачками отдельным триггером, одинаковые тексты не отправляй повторно, ошибка ИИ не должна ломать загрузку данных. Добавь функции listModels и testAgent для проверки из редактора. Промт для модели держи отдельным файлом, чтобы его можно было править без кода. На странице: индикатор «ИИ думает, до минуты», понятная ошибка с подсказкой «что сделать». Длинный ответ кэшируй по reqId, а страница пусть опрашивает каждые 5 секунд (Safari обрывает запросы длиннее минуты). Залей скрипт и обнови развёртывание без смены ссылки.`,
+      prompt2:"Образец: возьми функции callLlm_, gemini_, gigachat_, testAgent, listModels из Code.js нашего готового помощника по разбору встреч (файл положу в папку) и сделай так же.",
+      actions:[
+        "Редактор скрипта → вверху выбрать <code>listModels</code> → <b>Выполнить</b>. В «Журнале выполнения» — список моделей. Пусто или ошибка — проверьте ключ и включённый API.",
+        "Выбрать <code>testAgent</code> → <b>Выполнить</b>. Просит разрешение «подключаться к внешним сервисам» — разрешить. В журнале должна появиться фраза от модели.",
+        "На странице прогнать функцию на настоящем тексте, в том числе с телефона и в Safari."
+      ],
+      got:"aifn",
+      result:"testAgent отвечает, функция работает на странице."});
+  }
+
+  if (S.host === "firebase") L.push({id:"host", title:"Публикация на адрес *.web.app", sub:"постоянная короткая ссылка", who:["hand","ai"],
+    explain:"Firebase Hosting — бесплатный хостинг Google с коротким адресом. Страница там — витрина, а данные она берёт у скрипта по ссылке /exec. Firebase живёт в том же Google Cloud, поэтому барьеры те же, что у ключа Gemini.",
+    where:'<a href="https://console.firebase.google.com" target="_blank" rel="noopener">console.firebase.google.com</a>, в окне инкогнито',
+    actions:[
+      "Проверить аватар справа сверху: аккаунт скрипта.",
+      "<b>Create a new Firebase project</b>. Если проект Cloud уже есть (например, для ключа Gemini) — внизу <b>Add Firebase to Google Cloud project</b> и выбрать его: так не тратится лимит проектов и всё в одном месте.",
+      "Новый проект: имя латиницей, оно станет адресом (<code>romashka-time</code> → <code>romashka-time.web.app</code>). Под именем серым показан ID — если там хвост вида <code>-dba5e</code>, нажать на карандаш и исправить, иначе адрес будет с хвостом.",
+      "Google Analytics — <b>выключить</b> → Add Firebase / Create. Тариф Spark бесплатный, карта не нужна.",
+      "Агент пишет, что firebase просит вход, — в терминале <code>npx firebase-tools login:add почта</code> и подтвердить в браузере."
+    ],
+    prompt:"Выложи страницу на Firebase Hosting, проект <имя>, аккаунт <почта> (всегда передавай --account и --project явно). Сделай папку firebase/ и скрипт сборки tools/build_firebase, который берёт наш index.html, вписывает туда ссылку /exec и кладёт в firebase/public. В firebase.json поставь Cache-Control: no-cache, чтобы обновления были видны сразу. Задеплой и проверь, что страница открывается и данные грузятся. В конце запиши в README.md все ID, ссылки и команды обновления.",
+    got:"firebase",
+    shots:[["fb-1-new","Есть проект Cloud — «Add Firebase to Google Cloud project»"],["fb-2-pick","Выбрать проект Cloud из списка"],["fb-3-analytics","Analytics выключить"]],
+    result:"Ссылка <имя>.web.app открывается и показывает живые данные."});
+
+  if (S.host === "github") L.push({id:"host", title:"Публикация на GitHub Pages", sub:"бесплатно, адрес имя.github.io", who:["hand","ai"],
+    explain:"GitHub Pages показывает страницу прямо из репозитория. Данные она, как и с Firebase, берёт у скрипта по ссылке /exec.",
+    where:'<a href="https://github.com/new" target="_blank" rel="noopener">github.com/new</a>',
+    actions:[
+      "Войти в GitHub (аккаунт команды) → <b>New repository</b> → имя латиницей → <b>Public</b> → Create.",
+      "В репозитории: <b>Settings → Pages</b> → Source: «Deploy from a branch» → Branch: <code>main</code>, папка <code>/ (root)</code> → <b>Save</b>.",
+      "Через 1–2 минуты адрес появится вверху раздела Pages."
+    ],
+    warn:"Репозиторий публичный: код страницы видят все. Ключей и вебхуков в нём нет — они в свойствах скрипта, так и должно быть." + (client ? " Для клиентских страниц обычно лучше Firebase: адрес с названием клиента, всё на его аккаунте." : ""),
+    prompt:"Выложи страницу на GitHub Pages, репозиторий <имя>. Положи туда index.html со вписанной ссылкой /exec и залей через git; если git попросит вход — проведи меня через gh auth login. Проверь, что страница открывается и данные грузятся. В README.md запиши ссылки и как обновлять.",
+    got:"github",
+    result:"Ссылка …github.io/<имя> открывается и показывает живые данные."});
+
+  if (S.host === "gas") L.push({id:"host", title:"Ссылка на страницу из Apps Script", sub:"без Firebase и без Google Cloud", who:["hand"],
+    explain:"Страницу показывает сам скрипт. Работает даже там, где Google Cloud недоступен, но адрес длинный, а у людей с несколькими Google-аккаунтами бывают ошибки.",
+    actions:[
+      "Ссылка <code>/exec</code> из шага Apps Script — это и есть адрес страницы.",
+      "Длинную ссылку поставить кнопкой в Битриксе, в закладках или сократить.",
+      "Кто-то видит ошибку — попросить открыть в окне инкогнито. Если таких много — перейти на Firebase или GitHub (вопрос 9)."
+    ],
+    got:"gashost",
+    result:"Ссылка /exec открывается в инкогнито без входа и показывает живые данные."});
+
+  L.push({id:"check", title: client ? "Проверка и сдача клиенту" : "Проверка и запуск", sub:"каждый пункт — реальная ошибка с наших проектов", who:["hand"],
+    checks:[
+      "Ссылка открывается в инкогнито, без входа в Google",
+      "Открывается с телефона, таблицы не вылезают за край",
+      sheet ? "Поменяли значение в таблице → «Обновить» → на странице изменилось (потом вернуть)" : null,
+      bitrix ? "Изменили запись в Битриксе → «Обновить» → на странице изменилось" : null,
+      api ? "Изменили запись в системе с API → «Обновить» → на странице изменилось" : null,
+      file ? "Пришла новая выгрузка → на странице новые данные; старый файл → видна плашка «не обновлялся»" : null,
+      `Даты и «сегодня» совпадают с часами в поясе ${tzLabel()}`,
+      "2–3 итога сверены вручную с источником",
+      "ИИ: «Найди в коде страницы цифры, имена и даты, заданные вручную, а не из данных» — список пуст",
+      "Ошибки в данных показаны жёлтым предупреждением, страница не ломается",
+      "Видно «данные на дд.мм чч:мм»",
+      ...TYPES[S.type].check,
+      S.ai === "yes" ? "Функция ИИ работает в Safari и на телефоне; " + (client ? "клиент согласовал" : "договорились") + ", какие тексты уходят в ИИ" : null,
+      "В коде, таблицах и чатах нет вебхуков, ключей, паролей",
+      "README.md заполнен: аккаунт, ID таблицы, scriptId, ID развёртывания, адрес страницы, команды обновления",
+      client ? "Клиенту отправлено: что можно менять в источнике, а что нельзя (имена листов, заголовки столбцов)" : "Команде сказали, где ссылка, на каком аккаунте всё живёт и кто владелец"
+    ].filter(Boolean)});
+
+  L.push({id:"update", title:"Как обновлять потом", sub:"ссылка не меняется", who:["ai"],
+    table:[["Что поменяли","Что сделать"],
+      ["Вид страницы", S.host === "gas" ? "clasp push --force, затем create-deployment -i <ID развёртывания>" : S.host === "github" ? "Сборка → git push. Править исходник, а не собранный файл" : "Сборка → firebase deploy. Править исходник, не файл в firebase/public"],
+      ["Логика в Apps Script","clasp push --force, затем clasp create-deployment -i <ID развёртывания>. Без -i будет новая ссылка /exec"],
+      ["Данные в источнике","Ничего — кнопка «Обновить». Сменили формат данных — попросить ИИ сменить ключ кэша"]],
+    prompt:"Прочитай README.md. Сделай <правку> и обнови страницу без смены ссылок.",
+    result:"ИИ сам решает, что пересобрать и куда залить."});
+  return L;
+}
+
+function block(label, html){ return `<div><div class="block-label">${label}</div>${html}</div>`; }
+function promptBox(text){ return `<div class="prompt"><button class="copy" type="button">Копировать</button><pre>${esc(text)}</pre></div>`; }
+function gotTable(rows){ return `<div class="tbl"><table><thead><tr><th>Что видно</th><th>Что сделать</th></tr></thead><tbody>${
+  rows.map(r => `<tr><td>${esc(r[0])}</td><td>${esc(r[1])}</td></tr>`).join("")}</tbody></table></div>`; }
+const BADGE = {hand:'<span class="badge b-hand">Руками</span>', ai:'<span class="badge b-ai">Пишет ИИ</span>'};
+
+function render(){
+  document.querySelectorAll(".opts").forEach(g => g.querySelectorAll(".opt").forEach(b => {
+    const v = S[g.dataset.q];
+    b.setAttribute("aria-pressed", String(Array.isArray(v) ? v.includes(b.dataset.v) : v === b.dataset.v));
+  }));
+  document.getElementById("type-ex").innerHTML = TYPES[S.type].ex;
+  document.getElementById("ai-helper").hidden = S.ai !== "unsure";
+  document.getElementById("provider-q").hidden = S.ai !== "yes";
+  document.getElementById("tz").value = S.tz;
+  document.getElementById("form").innerHTML = visibleFields().map(f => {
+    const v = esc(C[f.k] || ""), ph = esc(val(f.ph)), hint = val(f.hint);
+    const input = f.area ? `<textarea id="f-${f.k}" data-k="${f.k}" placeholder="${ph}">${v}</textarea>`
+                         : `<input id="f-${f.k}" data-k="${f.k}" placeholder="${ph}" value="${v}" autocomplete="off">`;
+    return `<label class="field${f.wide ? " wide" : ""}" for="f-${f.k}"><span>${esc(val(f.l))}</span>${input}${hint ? `<small>${esc(hint)}</small>` : ""}</label>`;
+  }).join("");
+  renderSteps();
+}
+
+function renderSteps(){
+  const openIds = new Set([...document.querySelectorAll("details.step[open]")].map(d => d.dataset.id));
+  const L = steps();
+  const nOpt = L.filter(s => s.opt).length;
+  document.getElementById("count").textContent = `${L.length} шагов` + (nOpt ? ` · ${nOpt} модулей по вашим ответам` : "");
+  document.getElementById("steps").innerHTML = L.map((s, i) => {
+    const parts = [];
+    if (s.explain && S.level === "new") parts.push(`<div class="explain"><b>Что это и зачем.</b> ${s.explain}</div>`);
+    if (s.where) parts.push(`<div class="where"><b>Где:</b> ${s.where}</div>`);
+    if (s.actions) parts.push(block("Что нажать и сделать", `<ol>${s.actions.map(a => `<li>${a}</li>`).join("")}</ol>`));
+    if (s.shots) parts.push(block("Как это выглядит — нажмите, чтобы увеличить", `<div class="shots">${s.shots.map(([f, c]) =>
+      `<figure><button class="shot" type="button" data-src="shots/${f}.jpg" data-cap="${esc(c)}"><img src="shots/${f}.jpg" alt="${esc(c)}" loading="lazy"></button><figcaption>${esc(c)}</figcaption></figure>`).join("")}</div>`));
+    if (s.warn) parts.push(`<div class="warn">${esc(s.warn)}</div>`);
+    if (s.prompt) parts.push(block(s.id === "tz" ? "Шаблон ТЗ" : `Что написать ${ag()}`, promptBox(fill(s.prompt))));
+    if (s.prompt2) parts.push(block(s.id === "tz" ? `Промт ${ag()} по расшифровке` : "Если есть образец", promptBox(fill(s.prompt2))));
+    if (s.table) parts.push(`<div class="tbl"><table><thead><tr>${s.table[0].map(h => `<th>${h}</th>`).join("")}</tr></thead><tbody>${
+      s.table.slice(1).map(r => `<tr>${r.map(c => `<td>${esc(c)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`);
+    if (s.checks) parts.push(`<div class="checks" style="display:grid;gap:8px">${s.checks.map((c, j) => {
+      const k = "c" + j + ":" + c.slice(0, 24);
+      return `<label><input type="checkbox" data-k="${esc(k)}" ${done[k] ? "checked" : ""}><span>${esc(c)}</span></label>`; }).join("")}</div>`);
+    if (s.got) parts.push(block("Если не получается", gotTable(GOT[s.got].rows)));
+    if (s.result) parts.push(`<div class="result"><b>Готово, когда:</b><span>${esc(fill(s.result))}</span></div>`);
+    const open = openIds.size ? openIds.has(s.id) : i === 0;
+    return `<details class="step${s.opt ? " opt-step" : ""}" data-id="${s.id}" ${open ? "open" : ""}>
+      <summary><span class="num" aria-hidden="true"></span>
+        <span class="s-title">${esc(s.title)}<span class="s-sub">${esc(s.sub || "")}</span></span>
+        <span class="s-badges">${s.opt ? '<span class="badge b-opt">Модуль</span>' : ""}${s.who.map(w => BADGE[w]).join("")}</span></summary>
+      <div class="body">${parts.join("")}</div></details>`;
+  }).join("");
+  document.getElementById("preview").textContent = master();
+  document.getElementById("secret-warn").hidden = !Object.values(C).some(v => SECRET.test(v || ""));
+}
+
+const plain = html => { const d = document.createElement("div"); d.innerHTML = html; return d.textContent; };
+const WHO = {hand:"руками", ai:"делаешь ты"};
+const SRC = {sheet:"Google Таблица", bitrix:"Битрикс24", drive:"папка Google Диска", input:"вводят на странице", api:"другая система по API", file:"регулярная выгрузка файлом"};
+const HOST = {firebase:"Firebase Hosting (*.web.app)", github:"GitHub Pages", gas:"ссылка веб-приложения Apps Script"};
+
+// Весь маршрут одним сообщением для ИИ-агента
+function master(){
+  const L = steps();
+  const v = f => SECRET.test(C[f.k] || "") ? "(убрано: похоже на секрет — спроси меня заново)" : (C[f.k] || "").trim();
+  const out = [
+    `Делаем живую страницу «${(C.title || "").trim() || "без названия"}» (тип «${TYPES[S.type].l}»: ${TYPES[S.type].d}): данные → Apps Script → страница. Ты — мой ИИ-агент, работаем в этой папке.`,
+    "", "## Карточка проекта",
+    ...visibleFields().map(f => `- ${val(f.l)}: ${v(f) ? v(f).replace(/\n/g, "\n  ") : "(не заполнено — спроси меня)"}`),
+    `- Для кого: ${S.who === "client" ? "клиент" : "внутренний инструмент JTBD"}`,
+    `- Источники данных: ${S.src.map(k => SRC[k]).join(", ")}`,
+    `- ИИ внутри: ${S.ai === "yes" ? (S.provider === "gigachat" ? "да, GigaChat" : "да, Gemini") : "нет"}`,
+    `- Запись со страницы: ${S.write === "yes" ? "да" : "нет"}`,
+    `- Часовой пояс: ${tzFull()}`,
+    `- Где живёт страница: ${HOST[S.host]}`,
+    "", "## Как работаем",
+    "1. Сначала сохрани это сообщение в файл ПЛАН.md, а карточку проекта — в начало README.md.",
+    "2. Иди по шагам ниже строго по одному. После каждого шага покажи результат и жди моего «дальше».",
+    "3. Где шаг делается руками — коротко скажи, что мне нажать, и жди, пока я подтвержу.",
+    "4. Вебхуки, ключи API и пароли не проси и не записывай в файлы: их я кладу в свойства скрипта сам(а).",
+    "5. Данные бери сам; не получается — скажи прямо, я выгружу файлы.",
+    "6. Если что-то не выходит — сначала посмотри «Если не получается» у этого шага.",
+    S.level === "new" ? "7. Я делаю такое впервые: каждый новый термин объясняй одной простой фразой, а на ручных шагах пиши, куда именно нажать." : null,
+    "", "## Маршрут"
+  ].filter(x => x !== null);
+  L.forEach((s, i) => {
+    out.push("", `### Шаг ${i + 1}. ${s.title} (${s.who.map(w => WHO[w]).join(" + ")})`);
+    if (s.where) out.push(`Где: ${plain(s.where)}`);
+    if (s.actions) out.push("Действия:", ...s.actions.map(a => `- ${plain(a)}`));
+    if (s.warn) out.push(s.warn);
+    if (s.prompt) out.push(s.id === "tz" ? "Шаблон ТЗ — заполни по карточке, недостающее спроси у меня:" : "Задача для тебя:", fill(s.prompt));
+    if (s.prompt2) out.push(s.id === "tz" ? "Если в папке есть расшифровка встречи:" : "Если есть образец:", fill(s.prompt2));
+    if (s.table) out.push(...s.table.slice(1).map(r => `- ${r[0]} → ${r[1]}`));
+    if (s.checks) out.push(...s.checks.map(c => `- [ ] ${c}`));
+    if (s.got) out.push("Если не получается:", ...GOT[s.got].rows.map(r => `- ${r[0]} → ${r[1]}`));
+    if (s.result) out.push(`Готово, когда: ${fill(s.result)}`);
+  });
+  return out.join("\n");
+}
+
+function flash(msg){ const el = document.getElementById("saved"); el.textContent = msg; clearTimeout(flash.t); flash.t = setTimeout(() => el.textContent = "", 2200); }
+const saveS = () => { try { localStorage.setItem("nav2-answers", JSON.stringify(S)); } catch (err) {} };
+
+document.getElementById("tz").innerHTML = TZ.map(t => `<option value="${t[0]}">${esc(t[1])}</option>`).join("");
+document.getElementById("stuck").innerHTML = Object.values(GOT).map(g => `<h3>${esc(g.t)}</h3>${gotTable(g.rows)}`).join("");
+document.getElementById("abc").open = S.level === "new";
+
+document.querySelectorAll(".opts").forEach(g => g.addEventListener("click", e => {
+  const b = e.target.closest(".opt"); if (!b) return;
+  const q = g.dataset.q, v = b.dataset.v;
+  if (Array.isArray(S[q])) {
+    const on = S[q].includes(v);
+    if (on && S[q].length === 1) return;
+    S[q] = on ? S[q].filter(x => x !== v) : [...S[q], v];
+    if (q === "src" && v === "input" && !on) S.write = "yes";
+  } else {
+    if (S[q] === v) return;
+    S[q] = v;
+    if (q === "type" && v === "form") { S.write = "yes"; if (!S.src.includes("input")) S.src = [...S.src, "input"]; }
+    if (q === "type" && v === "assistant") S.ai = "yes";
+    if (q === "level") document.getElementById("abc").open = v === "new";
+  }
+  saveS();
+  render();
+}));
+document.getElementById("tz").addEventListener("change", e => { S.tz = e.target.value; saveS(); renderSteps(); });
+const zoom = document.getElementById("zoom");
+document.getElementById("zoom-close").addEventListener("click", () => zoom.close());
+zoom.addEventListener("click", e => { if (e.target === zoom) zoom.close(); });
+document.getElementById("steps").addEventListener("click", e => {
+  const sh = e.target.closest(".shot");
+  if (sh) {
+    document.getElementById("zoom-img").src = sh.dataset.src;
+    document.getElementById("zoom-img").alt = sh.dataset.cap;
+    document.getElementById("zoom-cap").textContent = sh.dataset.cap;
+    try { zoom.showModal(); } catch (err) { window.open(sh.dataset.src, "_blank", "noopener"); }
+    return;
+  }
+  const b = e.target.closest(".copy"); if (!b) return;
+  const pre = b.parentElement.querySelector("pre");
+  const ok = () => { b.textContent = "Скопировано"; setTimeout(() => b.textContent = "Копировать", 1600); };
+  const fallback = () => { const r = document.createRange(); r.selectNodeContents(pre); const s = getSelection(); s.removeAllRanges(); s.addRange(r); b.textContent = "Выделено — Ctrl+C"; };
+  try { navigator.clipboard.writeText(pre.textContent).then(ok, fallback); } catch (err) { fallback(); }
+});
+document.getElementById("steps").addEventListener("change", e => {
+  const c = e.target.closest("input[type=checkbox]"); if (!c) return;
+  done[c.dataset.k] = c.checked;
+  try { localStorage.setItem("nav-done", JSON.stringify(done)); } catch (err) {}
+});
+document.getElementById("form").addEventListener("input", e => {
+  const k = e.target.dataset.k; if (!k) return;
+  C[k] = e.target.value;
+  try { localStorage.setItem("nav-client", JSON.stringify(C)); } catch (err) {}
+  renderSteps();
+  flash("Сохранено в этом браузере");
+});
+document.getElementById("clear").addEventListener("click", () => {
+  if (!confirm("Очистить карточку проекта?")) return;
+  C = {};
+  try { localStorage.removeItem("nav-client"); } catch (err) {}
+  render();
+});
+document.getElementById("copy-all").addEventListener("click", e => {
+  const b = e.currentTarget, text = master();
+  const ok = () => { b.textContent = "Скопировано — вставьте в чат агента"; setTimeout(() => b.textContent = "Скопировать весь маршрут как промт", 2400); };
+  const fallback = () => {
+    const p = document.querySelector(".peek"); p.open = true;
+    const r = document.createRange(); r.selectNodeContents(document.getElementById("preview"));
+    const s = getSelection(); s.removeAllRanges(); s.addRange(r); b.textContent = "Выделено — нажмите Ctrl+C";
+  };
+  try { navigator.clipboard.writeText(text).then(ok, fallback); } catch (err) { fallback(); }
+});
+render();
+</script>
+
+</html>
